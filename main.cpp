@@ -30,7 +30,7 @@ void Draw(int event, int x, int y, int flags, void* param) {
 
 float scalefactor = 1.5;
 
-float min_conf = .7;
+float min_conf = .5;
 
 int main() {
     auto net = cv::dnn::DetectionModel("C:/cocods2020/frozen_inference_graph.pb", "C:/cocods2020/ssd_mobilenet_v3_large_coco_2020_01_14.pbtxt");
@@ -86,7 +86,16 @@ int main() {
     namedWindow("AITurret VISION", WINDOW_AUTOSIZE);
     camera >> frame1;
 
+    bool lastAccel = false;
+    bool lastPush = false;
+    bool pushPos = false;
+
+    int lastFireFrames = 0;
+
     while (true) {
+        bool needAccel = false;
+        bool needToFire = false;
+
         camera >> frame1;
 
         Mat frame = frame1.clone();
@@ -118,6 +127,11 @@ int main() {
             }
         }
 
+        float len = 0;
+
+        float addX = 0;
+        float addY = 0;
+
         if (detected) {
             int i = maxconfi;
             rectangle(frame, found[i], cv::Scalar(0, 0, 255), 2);
@@ -125,13 +139,13 @@ int main() {
             stringstream temp;
             temp << conf[i];
             putText(frame1, temp.str(), Point(found[i].x * scalefactor, found[i].y * scalefactor + 50), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255));
-            lastpoint = Point(int(found[i].x * scalefactor + found[i].width * scalefactor / 2), int(found[i].y * scalefactor + found[i].height * scalefactor * .3));
+            lastpoint = Point(int(found[i].x * scalefactor + found[i].width * scalefactor / 2), int(found[i].y * scalefactor + found[i].height * scalefactor * .1));
             circle(frame1, lastpoint, 3, Scalar(255, 0, 0), 2);
 
             float xshift = lastpoint.x - defpoint.x;
             float yshift = lastpoint.y - defpoint.y;
 
-            float len = std::sqrt(pow(xshift, 2) + pow(yshift, 2));
+            len = std::sqrt(pow(xshift, 2) + pow(yshift, 2));
 
             if (len < 40) {
                 islockedin = true;
@@ -144,21 +158,59 @@ int main() {
             line(frame1, defpoint, lastpoint, Scalar(0, 255, 0));
             line(frame1, defpoint, Point(int(defpoint.x + xnorm * 20), int(defpoint.y + ynorm * 20)), Scalar(255, 0, 0), 2);
 
-            posx += xnorm * len / 100;
-            posy += ynorm * len / 100;
+            addX = xnorm * pow(max(min(len / 50, 1), -1), 1.5) * .5;
+            addY = ynorm * pow(max(min(len / 50, 1), -1), 1.5) * .5;
+
+            if (len > 150) {
+                addX = xnorm * pow(max(min(len / 50, 1), -1), 1.5) * .9;
+                addY = ynorm * pow(max(min(len / 50, 1), -1), 1.5) * .9;
+            }
+
+            if (len < 20) {
+                addX = 0;
+                addY = 0;
+            }
+
+            needAccel = true;
+            if (len < 20) {
+                needToFire = true;
+            }
+
+            if (abs(addX) > 5) {
+                addX = 0;
+            }
+
+            if (abs(addY) > 5) {
+                addY = 0;
+            }
+
+            posx += addX;
+            posy += addY;
+
+            if (needToFire) {
+                if (lastFireFrames > 10) {
+                    pushPos = !pushPos;
+                    lastFireFrames = 0;
+                }
+                lastFireFrames++;
+            }
 
             frameswithoutdetection = 0;
-        } else {
+        }
+        else {
+            pushPos = false;
+            lastFireFrames = 0;
+
             if (frameswithoutdetection == 0) {
-                
+
             }
             if (frameswithoutdetection == 10) {
                 posx = 0;
                 posy = 0;
-            }   
+            }
             if (frameswithoutdetection > 10) {
                 posx += .5 * (float)mul;
-                if (posx > 30 || posx < - 30) {
+                if (posx > 30 || posx < -30) {
                     mul = mul * -1;
                 }
             }
@@ -172,9 +224,49 @@ int main() {
         posx = min(max(posx, -50), 50);
         posy = min(max(posy, -40), 40);
 
-        std::string data = std::to_string(posx) + "," + std::to_string(posy) + ";";
+        Mat df(300, 500, CV_8UC3, Scalar(0));
+
+        putText(df, "X: " + to_string(posx) + " Y: " + to_string(posy), Point(10, 30), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255), 2);
+        putText(df, "Len: " + to_string(len), Point(10, 60), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255), 2);
+        if (islockedin) {
+            putText(df, "LOCKED", Point(10, 90), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255), 2);
+        }
+        if (needAccel) {
+            putText(df, "ACCEL", Point(10, 120), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255), 2);
+        }
+        if (needToFire) {
+            putText(df, "!FIRE", Point(10, 150), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255), 2);
+        }
+        if (pushPos) {
+            putText(df, "PUSHED IN", Point(10, 180), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255), 2);
+        }
+        putText(df, "addX: " + to_string(addX) + " addY: " + to_string(addY), Point(10, 210), FONT_HERSHEY_SIMPLEX, 1, Scalar(0, 0, 255), 2);
+
+        cv::imshow("DEBUG", df);
+
+        std::string data = "1," + std::to_string(posx) + "," + std::to_string(posy) + ";";
         const char* data1 = data.data();
         bool retVal = WriteFile(hPort, data1, strlen(data1), &byteswritten, NULL);
+
+        if (needAccel != lastAccel) {
+            std::string data = "3,0;";
+            if (needAccel) {
+                data = "3,1;";
+            }
+            const char* data1 = data.data();
+            bool retVal = WriteFile(hPort, data1, strlen(data1), &byteswritten, NULL);
+        }
+        lastAccel = needAccel;
+
+        if (pushPos != lastPush) {
+            std::string data = "2,160;";
+            if (pushPos) {
+                data = "2,20;";
+            }
+            const char* data1 = data.data();
+            bool retVal = WriteFile(hPort, data1, strlen(data1), &byteswritten, NULL);
+        }
+        lastPush = pushPos;
 
         if ((cv::waitKey(1) & 0xFF) == 27) {
             break;
