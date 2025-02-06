@@ -5,6 +5,7 @@
 #include <iostream>
 #include "SimpleSerial.h"
 #include <windows.h>
+#include "utils.hpp"
 using namespace std;
 using namespace cv;
 using namespace cv::ml;
@@ -30,7 +31,7 @@ void Draw(int event, int x, int y, int flags, void* param) {
 
 float scalefactor = 1.5;
 
-float min_conf = .5;
+float min_conf = .6;
 
 int main() {
     auto net = cv::dnn::DetectionModel("C:/cocods2020/frozen_inference_graph.pb", "C:/cocods2020/ssd_mobilenet_v3_large_coco_2020_01_14.pbtxt");
@@ -41,7 +42,7 @@ int main() {
     net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
     net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
 
-    const WCHAR* PortSpecifier = GetWC("COM9");
+    const WCHAR* PortSpecifier = GetWC("COM3");
 
     DCB dcb;
     DWORD byteswritten;
@@ -112,20 +113,12 @@ int main() {
         Point defpoint = Point(int(640 / 2), int(480 / 2));
 
         bool islockedin = false;
-        bool detected = false;
 
-        int maxconfi = -1;
-        float maxconf = 0;
+        detectdata dd = GetDetection(found, weights, conf);
 
-        for (size_t i = 0; i < found.size(); i++) {
-            if (weights[i] == 1 && conf[i] > min_conf) {
-                if (conf[i] > maxconf) {
-                    maxconf = conf[i];
-                    maxconfi = i;
-                }
-                detected = true;
-            }
-        }
+        bool detected = dd.detected;
+        int maxconfi = dd.maxconfi;
+        float maxconf = dd.maxconf;
 
         float len = 0;
 
