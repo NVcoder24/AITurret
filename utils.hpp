@@ -1,4 +1,13 @@
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include "SimpleSerial.h"
+#include <windows.h>
 using namespace std;
+using namespace cv;
+using namespace cv::ml;
 
 struct detectdata {
 	bool detected;
@@ -6,7 +15,7 @@ struct detectdata {
 	float maxconf;
 };
 
-detectdata GetDetection(vector<Rect> &found, vector<int> &weights, vector<float> &conf) {
+detectdata GetDetection(vector<Rect> &found, vector<int> &weights, vector<float> &conf, float min_conf) {
     bool detected = false;
     int maxconfi = -1;
     float maxconf = 0;
