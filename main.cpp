@@ -42,7 +42,7 @@ int main() {
     net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
     net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
 
-    const WCHAR* PortSpecifier = GetWC("COM3");
+    const WCHAR* PortSpecifier = GetWC("COM7");
 
     DCB dcb;
     DWORD byteswritten;
@@ -114,7 +114,7 @@ int main() {
 
         bool islockedin = false;
 
-        detectdata dd = GetDetection(found, weights, conf);
+        detectdata dd = GetDetection(found, weights, conf, min_conf);
 
         bool detected = dd.detected;
         int maxconfi = dd.maxconfi;
